@@ -39,18 +39,33 @@ export default function ShowCard({
 
   return (
     <div className="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 flex flex-col">
-      <div className={`relative ${compact ? "h-48" : "h-64"} bg-slate-700`}>
-        {posterUrl ? (
-          <Image src={posterUrl} alt={name} fill className="object-cover" sizes="300px" />
-        ) : (
-          <div className="flex items-center justify-center h-full text-slate-500">No poster</div>
-        )}
-        {vote_average != null && (
-          <div className="absolute top-2 right-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">
-            {vote_average.toFixed(1)}
-          </div>
-        )}
-      </div>
+      {onRemove ? (
+        <Link href={`/show/${id}`} className={`block relative ${compact ? "h-48" : "h-64"} bg-slate-700`}>
+          {posterUrl ? (
+            <Image src={posterUrl} alt={name} fill className="object-cover" sizes="300px" />
+          ) : (
+            <div className="flex items-center justify-center h-full text-slate-500">No poster</div>
+          )}
+          {vote_average != null && (
+            <div className="absolute top-2 right-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">
+              {vote_average.toFixed(1)}
+            </div>
+          )}
+        </Link>
+      ) : (
+        <div className={`relative ${compact ? "h-48" : "h-64"} bg-slate-700`}>
+          {posterUrl ? (
+            <Image src={posterUrl} alt={name} fill className="object-cover" sizes="300px" />
+          ) : (
+            <div className="flex items-center justify-center h-full text-slate-500">No poster</div>
+          )}
+          {vote_average != null && (
+            <div className="absolute top-2 right-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">
+              {vote_average.toFixed(1)}
+            </div>
+          )}
+        </div>
+      )}
       <div className="p-4 flex-1 flex flex-col">
         {onRemove ? (
           <Link href={`/show/${id}`} className="font-semibold text-white text-lg leading-tight hover:text-amber-400 transition-colors">

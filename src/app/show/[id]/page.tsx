@@ -29,10 +29,16 @@ interface CrossRef {
   shows: { showId: number; showName: string; character: string }[];
 }
 
+interface SeenBefore {
+  actor: { id: number; name: string; profile_path: string | null };
+  characterHere: string;
+  otherShows: { showId: number; showName: string; character: string }[];
+}
+
 export default function ShowDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [show, setShow] = useState<ShowData | null>(null);
-  const [crossRefs, setCrossRefs] = useState<CrossRef[]>([]);
+  const [seenBefore, setSeenBefore] = useState<SeenBefore[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,10 +53,27 @@ export default function ShowDetailPage() {
           setError("Show not found in your collection");
         } else {
           setShow(found);
-          // Filter crossrefs to actors in this show
           if (Array.isArray(refs)) {
-            const showCastIds = new Set(found.cast.map((c: CastMember) => c.id));
-            setCrossRefs(refs.filter((r: CrossRef) => showCastIds.has(r.actor.id)));
+            const castMap = new Map<number, CastMember>(found.cast.map((c: CastMember) => [c.id, c]));
+            const seen: SeenBefore[] = [];
+            for (const ref of refs as CrossRef[]) {
+              const castMember = castMap.get(ref.actor.id);
+              if (!castMember) continue;
+              // Other shows = shows in the crossref that aren't the current show
+              const otherShows = ref.shows.filter(
+                (s: { showId: number }) => s.showId !== Number(id)
+              );
+              if (otherShows.length > 0) {
+                seen.push({
+                  actor: ref.actor,
+                  characterHere: castMember.character,
+                  otherShows,
+                });
+              }
+            }
+            // Sort by number of other shows (most appearances first)
+            seen.sort((a, b) => b.otherShows.length - a.otherShows.length);
+            setSeenBefore(seen);
           }
         }
         setLoading(false);
@@ -87,8 +110,7 @@ export default function ShowDetailPage() {
     ? `https://image.tmdb.org/t/p/w300${show.poster_path}`
     : null;
 
-  // Build a set of crossover actor IDs for highlighting
-  const crossRefActorIds = new Set(crossRefs.map((r) => r.actor.id));
+  const seenBeforeIds = new Set(seenBefore.map((s) => s.actor.id));
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -126,50 +148,76 @@ export default function ShowDetailPage() {
             </div>
           )}
           <p className="text-slate-300 leading-relaxed max-w-2xl">{show.overview}</p>
+
+          {seenBefore.length > 0 && (
+            <div className="mt-6 bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-3">
+              <p className="text-amber-400 text-sm font-medium">
+                {seenBefore.length} actor{seenBefore.length !== 1 ? "s" : ""} you&apos;ve seen in other shows in your collection
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
-      {crossRefs.length > 0 && (
+      {seenBefore.length > 0 && (
         <section className="mb-10">
-          <h2 className="text-xl font-semibold text-white mb-4">
-            Crossover Actors ({crossRefs.length})
+          <h2 className="text-xl font-semibold text-white mb-1">
+            Actors You&apos;ve Seen Before
           </h2>
-          <p className="text-slate-400 text-sm mb-4">
-            Actors from this show who also appear in other shows in your collection.
+          <p className="text-slate-400 text-sm mb-5">
+            These actors from {show.name} also appear in other shows in your collection.
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {crossRefs.map((ref) => {
-              const photoUrl = ref.actor.profile_path
-                ? `https://image.tmdb.org/t/p/w185${ref.actor.profile_path}`
+          <div className="space-y-4">
+            {seenBefore.map((entry) => {
+              const photoUrl = entry.actor.profile_path
+                ? `https://image.tmdb.org/t/p/w185${entry.actor.profile_path}`
                 : null;
               return (
-                <Link
-                  key={ref.actor.id}
-                  href={`/actor/${ref.actor.id}`}
-                  className="bg-slate-800 rounded-lg overflow-hidden border border-amber-500/30 hover:border-amber-500 transition-colors"
+                <div
+                  key={entry.actor.id}
+                  className="bg-slate-800 rounded-lg border border-amber-500/20 p-4 flex flex-col sm:flex-row gap-4"
                 >
-                  <div className="relative h-36 bg-slate-700">
-                    {photoUrl ? (
-                      <Image src={photoUrl} alt={ref.actor.name} fill className="object-cover object-top" sizes="185px" />
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-slate-500 text-3xl">?</div>
-                    )}
-                    <div className="absolute top-1 right-1 bg-amber-500 text-slate-900 text-xs font-bold px-1.5 py-0.5 rounded">
-                      {ref.shows.length} shows
+                  <Link
+                    href={`/actor/${entry.actor.id}`}
+                    className="flex-shrink-0 flex items-start gap-3 hover:opacity-80 transition-opacity"
+                  >
+                    <div className="relative w-16 h-20 rounded-md overflow-hidden bg-slate-700 flex-shrink-0">
+                      {photoUrl ? (
+                        <Image
+                          src={photoUrl}
+                          alt={entry.actor.name}
+                          fill
+                          className="object-cover object-top"
+                          sizes="64px"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-slate-500 text-xl">?</div>
+                      )}
                     </div>
-                  </div>
-                  <div className="p-2">
-                    <p className="text-sm font-medium text-white truncate">{ref.actor.name}</p>
-                    <div className="mt-1 space-y-0.5">
-                      {ref.shows.map((s, i) => (
-                        <p key={i} className="text-xs text-slate-400 truncate">
-                          <span className="text-slate-300">{s.showName}</span>
-                          {s.character && <> as {s.character}</>}
-                        </p>
-                      ))}
+                    <div className="min-w-0">
+                      <p className="text-white font-semibold">{entry.actor.name}</p>
+                      <p className="text-slate-400 text-sm">
+                        {entry.characterHere && (
+                          <>as <span className="text-slate-300">{entry.characterHere}</span> in this show</>
+                        )}
+                      </p>
                     </div>
+                  </Link>
+                  <div className="sm:ml-auto flex flex-wrap gap-2">
+                    {entry.otherShows.map((s) => (
+                      <Link
+                        key={s.showId}
+                        href={`/show/${s.showId}`}
+                        className="bg-slate-700/60 hover:bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 transition-colors"
+                      >
+                        <p className="text-sm text-amber-400 font-medium">{s.showName}</p>
+                        {s.character && (
+                          <p className="text-xs text-slate-400">as {s.character}</p>
+                        )}
+                      </Link>
+                    ))}
                   </div>
-                </Link>
+                </div>
               );
             })}
           </div>
@@ -185,7 +233,7 @@ export default function ShowDetailPage() {
             const photoUrl = member.profile_path
               ? `https://image.tmdb.org/t/p/w185${member.profile_path}`
               : null;
-            const isCrossover = crossRefActorIds.has(member.id);
+            const isCrossover = seenBeforeIds.has(member.id);
             return (
               <Link
                 key={`${member.id}-${i}`}
@@ -204,7 +252,7 @@ export default function ShowDetailPage() {
                   )}
                   {isCrossover && (
                     <div className="absolute top-1 left-1 bg-amber-500 text-slate-900 text-xs font-bold px-1.5 py-0.5 rounded">
-                      Crossover
+                      Seen before
                     </div>
                   )}
                 </div>
