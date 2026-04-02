@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       overview: details.overview,
       genres: details.genres?.map((g) => g.name) ?? [],
       vote_average: details.vote_average,
-      cast: cast.slice(0, 100).map((c) => ({
+      cast: cast.slice(0, 500).map((c) => ({
         id: c.id,
         name: c.name,
         character: c.character,

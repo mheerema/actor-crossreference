@@ -79,6 +79,18 @@ export async function addShow(show: StoredShow): Promise<StoredShow> {
   return show;
 }
 
+export async function updateShow(show: StoredShow): Promise<StoredShow> {
+  const data = await readStore();
+  const idx = data.shows.findIndex((s) => s.id === show.id);
+  if (idx === -1) {
+    data.shows.push(show);
+  } else {
+    data.shows[idx] = show;
+  }
+  await writeStore(data);
+  return show;
+}
+
 export async function removeShow(showId: number): Promise<boolean> {
   const data = await readStore();
   const before = data.shows.length;

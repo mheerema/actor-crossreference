@@ -150,8 +150,49 @@ export async function getShowDetails(showId: number) {
 }
 
 export async function getShowCredits(showId: number) {
-  const data = await get<{ cast: TmdbCastMember[] }>(`/tv/${showId}/aggregate_credits`);
-  return data.cast;
+  // Fetch aggregate credits (main + recurring cast) and show details for season count
+  const [aggData, details] = await Promise.all([
+    get<{ cast: TmdbCastMember[] }>(`/tv/${showId}/aggregate_credits`),
+    get<{ number_of_seasons: number }>(`/tv/${showId}`),
+  ]);
+
+  const castMap = new Map<number, TmdbCastMember>();
+  for (const member of aggData.cast) {
+    castMap.set(member.id, member);
+  }
+
+  // Fetch per-season credits to capture guest stars not in aggregate_credits
+  const seasonCount = details.number_of_seasons || 0;
+  if (seasonCount > 0 && seasonCount <= 30) {
+    const seasonPromises = Array.from({ length: seasonCount }, (_, i) =>
+      get<{
+        cast?: TmdbCastMember[];
+        guest_stars?: TmdbCastMember[];
+      }>(`/tv/${showId}/season/${i + 1}/credits`).catch(() => ({
+        cast: [],
+        guest_stars: [],
+      }))
+    );
+    const seasons = await Promise.all(seasonPromises);
+
+    for (const season of seasons) {
+      // Season-level cast
+      for (const member of season.cast ?? []) {
+        if (!castMap.has(member.id)) {
+          castMap.set(member.id, member);
+        }
+      }
+      // Guest stars — these are the ones most likely to be missed
+      for (const guest of season.guest_stars ?? []) {
+        if (!castMap.has(guest.id)) {
+          castMap.set(guest.id, guest);
+        }
+      }
+    }
+  }
+
+  // Sort by order (regulars first, then guests)
+  return Array.from(castMap.values()).sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 }
 
 export async function getShowRecommendations(showId: number) {

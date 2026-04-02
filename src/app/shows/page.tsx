@@ -27,6 +27,8 @@ export default function ShowsPage() {
   const [adding, setAdding] = useState<Set<number>>(new Set());
   const [sortBy, setSortBy] = useState<SortKey>("name");
   const [filterGenre, setFilterGenre] = useState<string>("all");
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/shows")
@@ -117,6 +119,28 @@ export default function ShowsPage() {
   const handleError = useCallback((error: string | null) => {
     setSearchError(error);
   }, []);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/shows/sync", { method: "POST" });
+      const data = await res.json();
+      if (data.error) {
+        setSyncResult(`Sync failed: ${data.error}`);
+      } else {
+        setSyncResult(`Synced ${data.synced}/${data.total} shows — cast data updated with guest appearances`);
+        // Refresh shows
+        const showsRes = await fetch("/api/shows");
+        const shows = await showsRes.json();
+        if (Array.isArray(shows)) setMyShows(shows);
+      }
+    } catch {
+      setSyncResult("Sync failed — check your connection");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Collect all unique genres from collection
   const allGenres = Array.from(
@@ -223,6 +247,13 @@ export default function ShowsPage() {
           </h2>
           {myShows.length > 0 && (
             <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm px-3 py-1.5 rounded-lg border border-slate-600 transition-colors disabled:opacity-50"
+              >
+                {syncing ? "Syncing..." : "Refresh Cast Data"}
+              </button>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortKey)}
@@ -245,6 +276,11 @@ export default function ShowsPage() {
                 </select>
               )}
             </div>
+          )}
+          {syncResult && (
+            <p className={`text-sm mt-2 ${syncResult.includes("failed") ? "text-red-400" : "text-green-400"}`}>
+              {syncResult}
+            </p>
           )}
         </div>
         {myShows.length === 0 ? (
