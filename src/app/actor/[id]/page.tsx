@@ -186,8 +186,11 @@ export default function ActorPage() {
           {filteredCredits.map((credit, i) => {
             const inMyShows = myShowIds.has(credit.id);
             const isAdding = adding.has(credit.id);
+            const isTvmazeCredit = credit.id < 0;
             const posterUrl = credit.poster_path
-              ? `https://image.tmdb.org/t/p/w185${credit.poster_path}`
+              ? credit.poster_path.startsWith("http")
+                ? credit.poster_path // TVMaze full URL
+                : `https://image.tmdb.org/t/p/w185${credit.poster_path}` // TMDB path
               : null;
             const year = (credit.first_air_date || credit.release_date || "").split("-")[0];
             const displayName = credit.name || credit.title || "Unknown";
@@ -240,6 +243,11 @@ export default function ActorPage() {
                         Film
                       </div>
                     )}
+                    {isTvmazeCredit && (
+                      <div className="absolute top-1 left-1 bg-indigo-600 text-white text-xs px-1.5 py-0.5 rounded">
+                        TVMaze
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="p-2 flex-1 flex flex-col">
@@ -257,7 +265,7 @@ export default function ActorPage() {
                       </p>
                     )}
                   </div>
-                  {credit.media_type === "tv" && !inMyShows && (
+                  {credit.media_type === "tv" && !inMyShows && !isTvmazeCredit && (
                     <button
                       onClick={() => handleAdd(credit.id)}
                       disabled={isAdding}
@@ -269,6 +277,11 @@ export default function ActorPage() {
                     >
                       {isAdding ? "Adding..." : "+ Add to My Shows"}
                     </button>
+                  )}
+                  {isTvmazeCredit && (
+                    <p className="mt-auto pt-2 text-xs text-slate-500 text-center">
+                      Search to add
+                    </p>
                   )}
                 </div>
               </div>
