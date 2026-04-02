@@ -1,65 +1,132 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import ActorCard from "@/components/ActorCard";
+import Link from "next/link";
 import Image from "next/image";
 
-export default function Home() {
+interface Show {
+  id: number;
+  name: string;
+  poster_path: string | null;
+}
+
+interface CrossRef {
+  actor: { id: number; name: string; profile_path: string | null };
+  shows: { showId: number; showName: string; character: string }[];
+}
+
+export default function Dashboard() {
+  const [shows, setShows] = useState<Show[]>([]);
+  const [crossRefs, setCrossRefs] = useState<CrossRef[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/shows").then((r) => r.json()),
+      fetch("/api/crossreference").then((r) => r.json()),
+    ]).then(([s, c]) => {
+      setShows(s);
+      setCrossRefs(c);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-slate-400 text-lg">Loading...</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="mb-10">
+        <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
+        <p className="text-slate-400">
+          Tracking {shows.length} show{shows.length !== 1 && "s"} with{" "}
+          {crossRefs.length} actor crossover{crossRefs.length !== 1 && "s"}
+        </p>
+      </div>
+
+      {shows.length === 0 ? (
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-12 text-center">
+          <h2 className="text-xl font-semibold text-white mb-3">No shows yet</h2>
+          <p className="text-slate-400 mb-6">
+            Start by adding some British mystery shows to your collection.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/shows"
+            className="inline-block px-6 py-3 bg-amber-500 text-slate-900 font-semibold rounded-lg hover:bg-amber-400 transition-colors"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            Add Your First Show
+          </Link>
         </div>
-      </main>
+      ) : (
+        <>
+          <section className="mb-10">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-white">My Shows</h2>
+              <Link href="/shows" className="text-amber-400 text-sm hover:text-amber-300">
+                Manage &rarr;
+              </Link>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {shows.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex-shrink-0 w-28 rounded-lg overflow-hidden border border-slate-700"
+                >
+                  <div className="relative h-40 bg-slate-700">
+                    {s.poster_path ? (
+                      <Image
+                        src={`https://image.tmdb.org/t/p/w185${s.poster_path}`}
+                        alt={s.name}
+                        fill
+                        className="object-cover"
+                        sizes="112px"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-slate-500 text-xs">
+                        {s.name}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-300 p-2 truncate">{s.name}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {crossRefs.length > 0 && (
+            <section className="mb-10">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-white">
+                  Top Crossover Actors
+                </h2>
+                <Link href="/network" className="text-amber-400 text-sm hover:text-amber-300">
+                  View Network &rarr;
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {crossRefs.slice(0, 10).map((ref) => (
+                  <ActorCard
+                    key={ref.actor.id}
+                    id={ref.actor.id}
+                    name={ref.actor.name}
+                    profile_path={ref.actor.profile_path}
+                    shows={ref.shows.map((s) => ({
+                      showName: s.showName,
+                      character: s.character,
+                    }))}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
     </div>
   );
 }
