@@ -57,9 +57,90 @@ export interface TmdbCredit {
   episode_count?: number;
 }
 
+interface MultiSearchResult {
+  id: number;
+  media_type: "tv" | "movie" | "person";
+  name?: string;
+  title?: string;
+  poster_path: string | null;
+  first_air_date?: string;
+  overview?: string;
+  genre_ids?: number[];
+  vote_average?: number;
+  origin_country?: string[];
+  known_for?: {
+    id: number;
+    media_type: "tv" | "movie";
+    name?: string;
+    title?: string;
+    poster_path: string | null;
+    first_air_date?: string;
+    overview?: string;
+    vote_average?: number;
+  }[];
+}
+
 export async function searchShows(query: string) {
-  const data = await get<{ results: TmdbShow[] }>("/search/tv", { query });
-  return data.results;
+  // Fetch two pages of TV results in parallel with a multi-search
+  const [tvPage1, tvPage2, multi] = await Promise.all([
+    get<{ results: TmdbShow[]; total_results: number }>("/search/tv", { query, page: "1" }),
+    get<{ results: TmdbShow[] }>("/search/tv", { query, page: "2" }).catch(() => ({ results: [] })),
+    get<{ results: MultiSearchResult[] }>("/search/multi", { query }).catch(() => ({ results: [] })),
+  ]);
+
+  const seen = new Set<number>();
+  const results: TmdbShow[] = [];
+
+  const addShow = (show: TmdbShow | { id: number; name?: string; title?: string; poster_path: string | null; first_air_date?: string; overview?: string; vote_average?: number; genre_ids?: number[]; origin_country?: string[] }) => {
+    if (seen.has(show.id)) return;
+    seen.add(show.id);
+    results.push({
+      id: show.id,
+      name: show.name || (show as { title?: string }).title || "",
+      poster_path: show.poster_path,
+      first_air_date: show.first_air_date || "",
+      overview: show.overview || "",
+      genre_ids: show.genre_ids,
+      vote_average: show.vote_average ?? 0,
+      origin_country: (show as TmdbShow).origin_country || [],
+    });
+  };
+
+  // Direct TV search results first (most relevant)
+  for (const show of tvPage1.results) addShow(show);
+  for (const show of tvPage2.results) addShow(show);
+
+  // Multi-search: extract TV results and TV shows from person "known_for"
+  for (const item of multi.results) {
+    if (item.media_type === "tv") {
+      addShow({
+        id: item.id,
+        name: item.name,
+        poster_path: item.poster_path,
+        first_air_date: item.first_air_date,
+        overview: item.overview,
+        vote_average: item.vote_average,
+        genre_ids: item.genre_ids,
+        origin_country: item.origin_country,
+      });
+    }
+    if (item.media_type === "person" && item.known_for) {
+      for (const kf of item.known_for) {
+        if (kf.media_type === "tv") {
+          addShow({
+            id: kf.id,
+            name: kf.name,
+            poster_path: kf.poster_path,
+            first_air_date: kf.first_air_date,
+            overview: kf.overview,
+            vote_average: kf.vote_average,
+          });
+        }
+      }
+    }
+  }
+
+  return results;
 }
 
 export async function getShowDetails(showId: number) {
