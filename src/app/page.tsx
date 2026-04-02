@@ -30,6 +30,7 @@ export default function Dashboard() {
   const [shows, setShows] = useState<Show[]>([]);
   const [crossRefs, setCrossRefs] = useState<CrossRef[]>([]);
   const [similarShows, setSimilarShows] = useState<SimilarEntry[]>([]);
+  const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
   const [adding, setAdding] = useState<Set<number>>(new Set());
@@ -38,12 +39,13 @@ export default function Dashboard() {
     Promise.all([
       fetch("/api/shows").then((r) => r.json()),
       fetch("/api/crossreference").then((r) => r.json()),
-    ]).then(([s, c]) => {
+      fetch("/api/dismissed").then((r) => r.json()),
+    ]).then(([s, c, d]) => {
       if (Array.isArray(s)) setShows(s);
       if (Array.isArray(c)) setCrossRefs(c);
+      if (Array.isArray(d)) setDismissed(new Set(d));
       setLoading(false);
 
-      // Fetch similar shows once we know there are shows in the collection
       if (Array.isArray(s) && s.length > 0) {
         setLoadingSimilar(true);
         fetch("/api/similar")
@@ -81,7 +83,20 @@ export default function Dashboard() {
     }
   };
 
+  const handleDismiss = async (showId: number) => {
+    setDismissed((prev) => new Set(prev).add(showId));
+    setSimilarShows((prev) => prev.filter((e) => e.show.id !== showId));
+    await fetch("/api/dismissed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ showId }),
+    });
+  };
+
   const myShowIds = new Set(shows.map((s) => s.id));
+
+  // Filter dismissed from similar shows
+  const visibleSimilar = similarShows.filter((e) => !dismissed.has(e.show.id));
 
   if (loading) {
     return (
@@ -178,7 +193,7 @@ export default function Dashboard() {
             </section>
           )}
 
-          {(similarShows.length > 0 || loadingSimilar) && (
+          {(visibleSimilar.length > 0 || loadingSimilar) && (
             <section className="mb-10">
               <div className="flex items-center justify-between mb-1">
                 <h2 className="text-xl font-semibold text-white">
@@ -195,7 +210,7 @@ export default function Dashboard() {
                 <div className="text-slate-400 text-sm">Finding shows you might like...</div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {similarShows.slice(0, 10).map((entry) => (
+                  {visibleSimilar.slice(0, 10).map((entry) => (
                     <ShowCard
                       key={entry.show.id}
                       id={entry.show.id}
@@ -205,6 +220,7 @@ export default function Dashboard() {
                       overview={entry.show.overview}
                       vote_average={entry.show.vote_average}
                       onAdd={handleAdd}
+                      onDismiss={handleDismiss}
                       added={myShowIds.has(entry.show.id) || adding.has(entry.show.id)}
                       compact
                       extra={

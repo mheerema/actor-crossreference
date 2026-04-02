@@ -88,6 +88,52 @@ export async function removeShow(showId: number): Promise<boolean> {
   return true;
 }
 
+// Dismissed shows — shows the user doesn't want recommended
+const REDIS_DISMISSED_KEY = "actor-crossref:dismissed";
+const DISMISSED_PATH = path.join(process.cwd(), "data", "dismissed.json");
+
+async function readDismissedLocal(): Promise<number[]> {
+  try {
+    const raw = await readFile(DISMISSED_PATH, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+async function writeDismissedLocal(ids: number[]): Promise<void> {
+  await writeFile(DISMISSED_PATH, JSON.stringify(ids));
+}
+
+export async function getDismissed(): Promise<number[]> {
+  if (useRedis()) {
+    const data = await getRedis().get<number[]>(REDIS_DISMISSED_KEY);
+    return data ?? [];
+  }
+  return readDismissedLocal();
+}
+
+export async function dismissShow(showId: number): Promise<void> {
+  const dismissed = await getDismissed();
+  if (dismissed.includes(showId)) return;
+  dismissed.push(showId);
+  if (useRedis()) {
+    await getRedis().set(REDIS_DISMISSED_KEY, dismissed);
+  } else {
+    await writeDismissedLocal(dismissed);
+  }
+}
+
+export async function undismissShow(showId: number): Promise<void> {
+  let dismissed = await getDismissed();
+  dismissed = dismissed.filter((id) => id !== showId);
+  if (useRedis()) {
+    await getRedis().set(REDIS_DISMISSED_KEY, dismissed);
+  } else {
+    await writeDismissedLocal(dismissed);
+  }
+}
+
 export interface CrossReference {
   actor: StoredCastMember;
   shows: { showId: number; showName: string; character: string }[];

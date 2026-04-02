@@ -13,6 +13,7 @@ interface ShowCardProps {
   vote_average?: number;
   onRemove?: (id: number) => void;
   onAdd?: (id: number) => void;
+  onDismiss?: (id: number) => void;
   added?: boolean;
   compact?: boolean;
   extra?: React.ReactNode;
@@ -28,6 +29,7 @@ export default function ShowCard({
   vote_average,
   onRemove,
   onAdd,
+  onDismiss,
   added,
   compact,
   extra,
@@ -37,43 +39,27 @@ export default function ShowCard({
     ? `https://image.tmdb.org/t/p/w300${poster_path}`
     : null;
 
+  // Link to /show/[id] for collection shows, /preview/[id] for non-collection
+  const detailHref = onRemove ? `/show/${id}` : `/preview/${id}`;
+
   return (
     <div className="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 flex flex-col">
-      {onRemove ? (
-        <Link href={`/show/${id}`} className={`block relative ${compact ? "h-48" : "h-64"} bg-slate-700`}>
-          {posterUrl ? (
-            <Image src={posterUrl} alt={name} fill className="object-cover" sizes="300px" />
-          ) : (
-            <div className="flex items-center justify-center h-full text-slate-500">No poster</div>
-          )}
-          {vote_average != null && (
-            <div className="absolute top-2 right-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">
-              {vote_average.toFixed(1)}
-            </div>
-          )}
-        </Link>
-      ) : (
-        <div className={`relative ${compact ? "h-48" : "h-64"} bg-slate-700`}>
-          {posterUrl ? (
-            <Image src={posterUrl} alt={name} fill className="object-cover" sizes="300px" />
-          ) : (
-            <div className="flex items-center justify-center h-full text-slate-500">No poster</div>
-          )}
-          {vote_average != null && (
-            <div className="absolute top-2 right-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">
-              {vote_average.toFixed(1)}
-            </div>
-          )}
-        </div>
-      )}
-      <div className="p-4 flex-1 flex flex-col">
-        {onRemove ? (
-          <Link href={`/show/${id}`} className="font-semibold text-white text-lg leading-tight hover:text-amber-400 transition-colors">
-            {name}
-          </Link>
+      <Link href={detailHref} className={`block relative ${compact ? "h-48" : "h-64"} bg-slate-700 group`}>
+        {posterUrl ? (
+          <Image src={posterUrl} alt={name} fill className="object-cover group-hover:opacity-80 transition-opacity" sizes="300px" />
         ) : (
-          <h3 className="font-semibold text-white text-lg leading-tight">{name}</h3>
+          <div className="flex items-center justify-center h-full text-slate-500">No poster</div>
         )}
+        {vote_average != null && (
+          <div className="absolute top-2 right-2 bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">
+            {vote_average.toFixed(1)}
+          </div>
+        )}
+      </Link>
+      <div className="p-4 flex-1 flex flex-col">
+        <Link href={detailHref} className="font-semibold text-white text-lg leading-tight hover:text-amber-400 transition-colors">
+          {name}
+        </Link>
         <p className="text-slate-400 text-sm mt-1">{year}</p>
         {genres && genres.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
@@ -88,7 +74,7 @@ export default function ShowCard({
           <p className="text-slate-400 text-sm mt-2 line-clamp-3">{overview}</p>
         )}
         {extra}
-        <div className="mt-auto pt-3">
+        <div className="mt-auto pt-3 space-y-2">
           {onRemove && (
             <button
               onClick={() => onRemove(id)}
@@ -108,6 +94,14 @@ export default function ShowCard({
               }`}
             >
               {added ? "Added" : "Add to My Shows"}
+            </button>
+          )}
+          {onDismiss && !added && (
+            <button
+              onClick={() => onDismiss(id)}
+              className="w-full px-3 py-1.5 text-slate-500 hover:text-slate-300 text-xs transition-colors"
+            >
+              Not interested
             </button>
           )}
         </div>
