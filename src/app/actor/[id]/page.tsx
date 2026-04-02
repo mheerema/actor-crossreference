@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 
 interface PersonData {
   id: number;
@@ -34,22 +35,44 @@ export default function ActorPage() {
   const [person, setPerson] = useState<PersonData | null>(null);
   const [myShows, setMyShows] = useState<MyShow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bioExpanded, setBioExpanded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       fetch(`/api/tmdb/person/${id}`).then((r) => r.json()),
       fetch("/api/shows").then((r) => r.json()),
     ]).then(([p, s]) => {
-      setPerson(p);
-      setMyShows(s);
+      if (p.error) {
+        setError(p.error);
+      } else {
+        setPerson(p);
+      }
+      if (Array.isArray(s)) setMyShows(s);
+      setLoading(false);
+    }).catch(() => {
+      setError("Failed to load actor details");
       setLoading(false);
     });
   }, [id]);
 
-  if (loading || !person) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-slate-400 text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  if (error || !person) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-12 text-center">
+          <p className="text-slate-400">{error || "Actor not found"}</p>
+          <Link href="/" className="text-amber-400 hover:text-amber-300 mt-4 inline-block">
+            &larr; Back to Dashboard
+          </Link>
+        </div>
       </div>
     );
   }
@@ -91,9 +114,19 @@ export default function ActorPage() {
             <p className="text-slate-400 text-sm mb-3">{person.place_of_birth}</p>
           )}
           {person.biography && (
-            <p className="text-slate-300 text-sm leading-relaxed max-w-2xl line-clamp-6">
-              {person.biography}
-            </p>
+            <div>
+              <p className={`text-slate-300 text-sm leading-relaxed max-w-2xl ${!bioExpanded ? "line-clamp-6" : ""}`}>
+                {person.biography}
+              </p>
+              {person.biography.length > 400 && (
+                <button
+                  onClick={() => setBioExpanded(!bioExpanded)}
+                  className="text-amber-400 hover:text-amber-300 text-sm mt-1 transition-colors"
+                >
+                  {bioExpanded ? "Show less" : "Read more"}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -106,15 +139,13 @@ export default function ActorPage() {
             const posterUrl = credit.poster_path
               ? `https://image.tmdb.org/t/p/w185${credit.poster_path}`
               : null;
-            return (
-              <div
-                key={`${credit.id}-${i}`}
-                className={`rounded-lg overflow-hidden border ${
-                  inMyShows
-                    ? "border-amber-500 ring-1 ring-amber-500/30"
-                    : "border-slate-700"
-                } bg-slate-800`}
-              >
+            const className = `block rounded-lg overflow-hidden border ${
+              inMyShows
+                ? "border-amber-500 ring-1 ring-amber-500/30 hover:ring-amber-500/60 transition-all"
+                : "border-slate-700"
+            } bg-slate-800`;
+            const content = (
+              <>
                 <div className="relative h-36 bg-slate-700">
                   {posterUrl ? (
                     <Image
@@ -148,6 +179,15 @@ export default function ActorPage() {
                     </p>
                   )}
                 </div>
+              </>
+            );
+            return inMyShows ? (
+              <Link key={`${credit.id}-${i}`} href={`/show/${credit.id}`} className={className}>
+                {content}
+              </Link>
+            ) : (
+              <div key={`${credit.id}-${i}`} className={className}>
+                {content}
               </div>
             );
           })}

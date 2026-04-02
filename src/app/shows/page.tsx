@@ -15,34 +15,46 @@ interface Show {
   vote_average?: number;
 }
 
+type SortKey = "name" | "year" | "rating";
+
 export default function ShowsPage() {
   const [myShows, setMyShows] = useState<Show[]>([]);
   const [searchResults, setSearchResults] = useState<Show[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [adding, setAdding] = useState<Set<number>>(new Set());
+  const [sortBy, setSortBy] = useState<SortKey>("name");
+  const [filterGenre, setFilterGenre] = useState<string>("all");
 
   useEffect(() => {
     fetch("/api/shows")
       .then((r) => r.json())
-      .then(setMyShows);
+      .then((data) => {
+        if (Array.isArray(data)) setMyShows(data);
+      });
   }, []);
 
   const myShowIds = new Set(myShows.map((s) => s.id));
 
   const handleAdd = async (showId: number) => {
     setAdding((prev) => new Set(prev).add(showId));
-    const res = await fetch("/api/shows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ showId }),
-    });
-    const saved = await res.json();
-    setMyShows((prev) => [...prev, saved]);
-    setAdding((prev) => {
-      const next = new Set(prev);
-      next.delete(showId);
-      return next;
-    });
+    try {
+      const res = await fetch("/api/shows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ showId }),
+      });
+      const saved = await res.json();
+      if (res.ok) {
+        setMyShows((prev) => [...prev, saved]);
+      }
+    } finally {
+      setAdding((prev) => {
+        const next = new Set(prev);
+        next.delete(showId);
+        return next;
+      });
+    }
   };
 
   const handleRemove = async (showId: number) => {
@@ -58,6 +70,34 @@ export default function ShowsPage() {
     setSearching(loading);
   }, []);
 
+  const handleError = useCallback((error: string | null) => {
+    setSearchError(error);
+  }, []);
+
+  // Collect all unique genres from collection
+  const allGenres = Array.from(
+    new Set(myShows.flatMap((s) => s.genres ?? []))
+  ).sort();
+
+  // Filter and sort collection
+  const filteredShows = myShows
+    .filter((s) => filterGenre === "all" || (s.genres ?? []).includes(filterGenre))
+    .sort((a, b) => {
+      switch (sortBy) {
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "year": {
+          const aYear = a.first_air_date?.split("-")[0] ?? "0";
+          const bYear = b.first_air_date?.split("-")[0] ?? "0";
+          return bYear.localeCompare(aYear);
+        }
+        case "rating":
+          return (b.vote_average ?? 0) - (a.vote_average ?? 0);
+        default:
+          return 0;
+      }
+    });
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold text-white mb-6">My Shows</h1>
@@ -66,9 +106,16 @@ export default function ShowsPage() {
         <SearchBar
           onResults={handleResults}
           onLoading={handleLoading}
+          onError={handleError}
           placeholder="Search for a TV show to add..."
         />
       </div>
+
+      {searchError && (
+        <div className="bg-red-900/30 border border-red-700 rounded-lg px-4 py-3 mb-6 text-red-300 text-sm">
+          {searchError}
+        </div>
+      )}
 
       {searching && (
         <div className="text-slate-400 mb-6">Searching...</div>
@@ -97,16 +144,47 @@ export default function ShowsPage() {
       )}
 
       <section>
-        <h2 className="text-xl font-semibold text-white mb-4">
-          My Collection ({myShows.length})
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h2 className="text-xl font-semibold text-white">
+            My Collection ({filteredShows.length}{filterGenre !== "all" ? ` of ${myShows.length}` : ""})
+          </h2>
+          {myShows.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortKey)}
+                className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+              >
+                <option value="name">Sort: Name</option>
+                <option value="year">Sort: Year</option>
+                <option value="rating">Sort: Rating</option>
+              </select>
+              {allGenres.length > 0 && (
+                <select
+                  value={filterGenre}
+                  onChange={(e) => setFilterGenre(e.target.value)}
+                  className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                >
+                  <option value="all">All Genres</option>
+                  {allGenres.map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+        </div>
         {myShows.length === 0 ? (
           <p className="text-slate-400">
             No shows yet. Search above to start adding shows.
           </p>
+        ) : filteredShows.length === 0 ? (
+          <p className="text-slate-400">
+            No shows match the selected filter.
+          </p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {myShows.map((show) => (
+            {filteredShows.map((show) => (
               <ShowCard
                 key={show.id}
                 id={show.id}

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 
 interface ShowCardProps {
   id: number;
@@ -51,7 +52,13 @@ export default function ShowCard({
         )}
       </div>
       <div className="p-4 flex-1 flex flex-col">
-        <h3 className="font-semibold text-white text-lg leading-tight">{name}</h3>
+        {onRemove ? (
+          <Link href={`/show/${id}`} className="font-semibold text-white text-lg leading-tight hover:text-amber-400 transition-colors">
+            {name}
+          </Link>
+        ) : (
+          <h3 className="font-semibold text-white text-lg leading-tight">{name}</h3>
+        )}
         <p className="text-slate-400 text-sm mt-1">{year}</p>
         {genres && genres.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">

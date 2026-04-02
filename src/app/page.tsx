@@ -26,8 +26,10 @@ export default function Dashboard() {
       fetch("/api/shows").then((r) => r.json()),
       fetch("/api/crossreference").then((r) => r.json()),
     ]).then(([s, c]) => {
-      setShows(s);
-      setCrossRefs(c);
+      if (Array.isArray(s)) setShows(s);
+      if (Array.isArray(c)) setCrossRefs(c);
+      setLoading(false);
+    }).catch(() => {
       setLoading(false);
     });
   }, []);
@@ -74,9 +76,10 @@ export default function Dashboard() {
             </div>
             <div className="flex gap-3 overflow-x-auto pb-2">
               {shows.map((s) => (
-                <div
+                <Link
                   key={s.id}
-                  className="flex-shrink-0 w-28 rounded-lg overflow-hidden border border-slate-700"
+                  href={`/show/${s.id}`}
+                  className="flex-shrink-0 w-28 rounded-lg overflow-hidden border border-slate-700 hover:border-amber-500/50 transition-colors"
                 >
                   <div className="relative h-40 bg-slate-700">
                     {s.poster_path ? (
@@ -94,7 +97,7 @@ export default function Dashboard() {
                     )}
                   </div>
                   <p className="text-xs text-slate-300 p-2 truncate">{s.name}</p>
-                </div>
+                </Link>
               ))}
             </div>
           </section>
