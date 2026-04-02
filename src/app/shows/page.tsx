@@ -20,7 +20,9 @@ type SortKey = "name" | "year" | "rating";
 export default function ShowsPage() {
   const [myShows, setMyShows] = useState<Show[]>([]);
   const [searchResults, setSearchResults] = useState<Show[]>([]);
+  const [similarShows, setSimilarShows] = useState<Show[]>([]);
   const [searching, setSearching] = useState(false);
+  const [loadingSimilar, setLoadingSimilar] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [adding, setAdding] = useState<Set<number>>(new Set());
   const [sortBy, setSortBy] = useState<SortKey>("name");
@@ -62,12 +64,54 @@ export default function ShowsPage() {
     setMyShows((prev) => prev.filter((s) => s.id !== showId));
   };
 
-  const handleResults = useCallback((results: unknown[]) => {
-    setSearchResults(results as Show[]);
+  // Fetch similar shows for the top search result
+  const fetchSimilarShows = useCallback(async (results: Show[]) => {
+    if (results.length === 0) {
+      setSimilarShows([]);
+      return;
+    }
+    setLoadingSimilar(true);
+    try {
+      // Fetch similar for the top 3 results, deduplicate
+      const topIds = results.slice(0, 3).map((r) => r.id);
+      const allResultIds = new Set(results.map((r) => r.id));
+      const responses = await Promise.all(
+        topIds.map((id) =>
+          fetch(`/api/tmdb/show/${id}/similar`)
+            .then((r) => r.json())
+            .then((data) => (Array.isArray(data) ? data : []))
+            .catch(() => [])
+        )
+      );
+      const seen = new Set<number>();
+      const similar: Show[] = [];
+      for (const batch of responses) {
+        for (const show of batch) {
+          if (!seen.has(show.id) && !allResultIds.has(show.id)) {
+            seen.add(show.id);
+            similar.push(show);
+          }
+        }
+      }
+      setSimilarShows(similar.slice(0, 10));
+    } catch {
+      setSimilarShows([]);
+    } finally {
+      setLoadingSimilar(false);
+    }
   }, []);
+
+  const handleResults = useCallback((results: unknown[]) => {
+    const shows = results as Show[];
+    setSearchResults(shows);
+    fetchSimilarShows(shows);
+  }, [fetchSimilarShows]);
 
   const handleLoading = useCallback((loading: boolean) => {
     setSearching(loading);
+    if (loading) {
+      setSimilarShows([]);
+    }
   }, []);
 
   const handleError = useCallback((error: string | null) => {
@@ -140,6 +184,35 @@ export default function ShowsPage() {
               />
             ))}
           </div>
+        </section>
+      )}
+
+      {(similarShows.length > 0 || loadingSimilar) && (
+        <section className="mb-12">
+          <h2 className="text-xl font-semibold text-white mb-1">Similar Shows</h2>
+          <p className="text-slate-400 text-sm mb-4">
+            Shows similar to your search results
+          </p>
+          {loadingSimilar ? (
+            <div className="text-slate-400 text-sm">Finding similar shows...</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {similarShows.map((show) => (
+                <ShowCard
+                  key={show.id}
+                  id={show.id}
+                  name={show.name}
+                  poster_path={show.poster_path}
+                  first_air_date={show.first_air_date}
+                  overview={show.overview}
+                  vote_average={show.vote_average}
+                  onAdd={handleAdd}
+                  added={myShowIds.has(show.id) || adding.has(show.id)}
+                  compact
+                />
+              ))}
+            </div>
+          )}
         </section>
       )}
 

@@ -76,6 +76,11 @@ export async function getShowRecommendations(showId: number) {
   return data.results;
 }
 
+export async function getSimilarShows(showId: number) {
+  const data = await get<{ results: TmdbShow[] }>(`/tv/${showId}/similar`);
+  return data.results;
+}
+
 export async function getPersonDetails(personId: number) {
   return get<TmdbPerson>(`/person/${personId}`);
 }

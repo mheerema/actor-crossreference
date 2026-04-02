@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ActorCard from "@/components/ActorCard";
+import ShowCard from "@/components/ShowCard";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -9,6 +10,9 @@ interface Show {
   id: number;
   name: string;
   poster_path: string | null;
+  first_air_date: string;
+  overview: string;
+  vote_average?: number;
 }
 
 interface CrossRef {
@@ -16,10 +20,19 @@ interface CrossRef {
   shows: { showId: number; showName: string; character: string }[];
 }
 
+interface SimilarEntry {
+  show: Show;
+  similarTo: string[];
+  score: number;
+}
+
 export default function Dashboard() {
   const [shows, setShows] = useState<Show[]>([]);
   const [crossRefs, setCrossRefs] = useState<CrossRef[]>([]);
+  const [similarShows, setSimilarShows] = useState<SimilarEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingSimilar, setLoadingSimilar] = useState(false);
+  const [adding, setAdding] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     Promise.all([
@@ -29,10 +42,46 @@ export default function Dashboard() {
       if (Array.isArray(s)) setShows(s);
       if (Array.isArray(c)) setCrossRefs(c);
       setLoading(false);
+
+      // Fetch similar shows once we know there are shows in the collection
+      if (Array.isArray(s) && s.length > 0) {
+        setLoadingSimilar(true);
+        fetch("/api/similar")
+          .then((r) => r.json())
+          .then((data) => {
+            if (Array.isArray(data)) setSimilarShows(data);
+          })
+          .catch(() => {})
+          .finally(() => setLoadingSimilar(false));
+      }
     }).catch(() => {
       setLoading(false);
     });
   }, []);
+
+  const handleAdd = async (showId: number) => {
+    setAdding((prev) => new Set(prev).add(showId));
+    try {
+      const res = await fetch("/api/shows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ showId }),
+      });
+      const saved = await res.json();
+      if (res.ok) {
+        setShows((prev) => [...prev, saved]);
+        setSimilarShows((prev) => prev.filter((e) => e.show.id !== showId));
+      }
+    } finally {
+      setAdding((prev) => {
+        const next = new Set(prev);
+        next.delete(showId);
+        return next;
+      });
+    }
+  };
+
+  const myShowIds = new Set(shows.map((s) => s.id));
 
   if (loading) {
     return (
@@ -126,6 +175,48 @@ export default function Dashboard() {
                   />
                 ))}
               </div>
+            </section>
+          )}
+
+          {(similarShows.length > 0 || loadingSimilar) && (
+            <section className="mb-10">
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-xl font-semibold text-white">
+                  You May Also Like
+                </h2>
+                <Link href="/recommendations" className="text-amber-400 text-sm hover:text-amber-300">
+                  More recommendations &rarr;
+                </Link>
+              </div>
+              <p className="text-slate-400 text-sm mb-4">
+                Shows similar to the ones in your collection
+              </p>
+              {loadingSimilar ? (
+                <div className="text-slate-400 text-sm">Finding shows you might like...</div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {similarShows.slice(0, 10).map((entry) => (
+                    <ShowCard
+                      key={entry.show.id}
+                      id={entry.show.id}
+                      name={entry.show.name}
+                      poster_path={entry.show.poster_path}
+                      first_air_date={entry.show.first_air_date}
+                      overview={entry.show.overview}
+                      vote_average={entry.show.vote_average}
+                      onAdd={handleAdd}
+                      added={myShowIds.has(entry.show.id) || adding.has(entry.show.id)}
+                      compact
+                      extra={
+                        <p className="text-xs text-amber-400/80 mt-2">
+                          Similar to {entry.similarTo.slice(0, 3).join(", ")}
+                          {entry.similarTo.length > 3 && ` +${entry.similarTo.length - 3} more`}
+                        </p>
+                      }
+                    />
+                  ))}
+                </div>
+              )}
             </section>
           )}
         </>
