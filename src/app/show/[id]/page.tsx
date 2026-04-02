@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import ExternalRatings from "@/components/ExternalRatings";
 
 interface CastMember {
   id: number;
@@ -138,8 +139,9 @@ export default function ShowDetailPage() {
               </span>
             )}
           </div>
+          <ExternalRatings showName={show.name} />
           {show.genres.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-4">
+            <div className="flex flex-wrap gap-2 mb-4 mt-3">
               {show.genres.map((g) => (
                 <span key={g} className="bg-slate-700 text-slate-300 text-sm px-3 py-1 rounded-full">
                   {g}
