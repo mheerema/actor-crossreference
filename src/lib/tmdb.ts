@@ -81,20 +81,21 @@ interface MultiSearchResult {
 }
 
 export async function searchShows(query: string) {
-  // Fetch two pages of TV results in parallel with a multi-search
-  const [tvPage1, tvPage2, multi] = await Promise.all([
+  const queryLower = query.toLowerCase().trim();
+
+  // Fetch first page of TV results + multi-search in parallel
+  const [tvPage1, multi] = await Promise.all([
     get<{ results: TmdbShow[]; total_results: number }>("/search/tv", { query, page: "1" }),
-    get<{ results: TmdbShow[] }>("/search/tv", { query, page: "2" }).catch(() => ({ results: [] })),
     get<{ results: MultiSearchResult[] }>("/search/multi", { query }).catch(() => ({ results: [] })),
   ]);
 
   const seen = new Set<number>();
-  const results: TmdbShow[] = [];
+  const allShows: TmdbShow[] = [];
 
   const addShow = (show: { id: number; name?: string; title?: string; poster_path: string | null; first_air_date?: string; overview?: string; vote_average?: number; genre_ids?: number[]; origin_country?: string[] }) => {
     if (seen.has(show.id)) return;
     seen.add(show.id);
-    results.push({
+    allShows.push({
       id: show.id,
       name: show.name || show.title || "",
       poster_path: show.poster_path,
@@ -106,19 +107,42 @@ export async function searchShows(query: string) {
     });
   };
 
-  // Direct TV search results first (most relevant)
   for (const show of tvPage1.results) addShow(show);
-  for (const show of tvPage2.results) addShow(show);
-
-  // Multi-search: only include direct TV results (not person known_for,
-  // which returns unrelated shows like talk show appearances)
   for (const item of multi.results) {
-    if (item.media_type === "tv") {
-      addShow(item);
-    }
+    if (item.media_type === "tv") addShow(item);
   }
 
-  return results;
+  // Score and rank results by relevance
+  const scored = allShows.map((show) => {
+    let score = 0;
+    const nameLower = show.name.toLowerCase();
+
+    // Exact match gets highest score
+    if (nameLower === queryLower) score += 100;
+    // Name starts with query
+    else if (nameLower.startsWith(queryLower)) score += 50;
+    // Name contains query as a whole phrase
+    else if (nameLower.includes(queryLower)) score += 30;
+    // Query words all appear in the name
+    else {
+      const queryWords = queryLower.split(/\s+/);
+      const matchCount = queryWords.filter((w) => nameLower.includes(w)).length;
+      score += (matchCount / queryWords.length) * 20;
+    }
+
+    // Boost shows with posters (usually more legitimate/complete entries)
+    if (show.poster_path) score += 5;
+    // Boost by rating (quality signal)
+    score += (show.vote_average ?? 0) * 0.5;
+    // Boost English-language shows slightly (for a British mystery app)
+    if (show.origin_country?.includes("GB") || show.origin_country?.includes("US")) score += 3;
+
+    return { show, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  return scored.map((s) => s.show).slice(0, 20);
 }
 
 export async function getShowDetails(showId: number) {
