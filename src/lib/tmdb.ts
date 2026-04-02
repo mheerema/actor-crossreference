@@ -91,12 +91,12 @@ export async function searchShows(query: string) {
   const seen = new Set<number>();
   const results: TmdbShow[] = [];
 
-  const addShow = (show: TmdbShow | { id: number; name?: string; title?: string; poster_path: string | null; first_air_date?: string; overview?: string; vote_average?: number; genre_ids?: number[]; origin_country?: string[] }) => {
+  const addShow = (show: { id: number; name?: string; title?: string; poster_path: string | null; first_air_date?: string; overview?: string; vote_average?: number; genre_ids?: number[]; origin_country?: string[] }) => {
     if (seen.has(show.id)) return;
     seen.add(show.id);
     results.push({
       id: show.id,
-      name: show.name || (show as { title?: string }).title || "",
+      name: show.name || show.title || "",
       poster_path: show.poster_path,
       first_air_date: show.first_air_date || "",
       overview: show.overview || "",
@@ -110,33 +110,11 @@ export async function searchShows(query: string) {
   for (const show of tvPage1.results) addShow(show);
   for (const show of tvPage2.results) addShow(show);
 
-  // Multi-search: extract TV results and TV shows from person "known_for"
+  // Multi-search: only include direct TV results (not person known_for,
+  // which returns unrelated shows like talk show appearances)
   for (const item of multi.results) {
     if (item.media_type === "tv") {
-      addShow({
-        id: item.id,
-        name: item.name,
-        poster_path: item.poster_path,
-        first_air_date: item.first_air_date,
-        overview: item.overview,
-        vote_average: item.vote_average,
-        genre_ids: item.genre_ids,
-        origin_country: item.origin_country,
-      });
-    }
-    if (item.media_type === "person" && item.known_for) {
-      for (const kf of item.known_for) {
-        if (kf.media_type === "tv") {
-          addShow({
-            id: kf.id,
-            name: kf.name,
-            poster_path: kf.poster_path,
-            first_air_date: kf.first_air_date,
-            overview: kf.overview,
-            vote_average: kf.vote_average,
-          });
-        }
-      }
+      addShow(item);
     }
   }
 
